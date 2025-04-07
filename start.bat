@@ -1,0 +1,6 @@
+@echo off
+echo Installing dependencies...
+pip install flask requests
+echo Starting the GitHub tracker...
+python app.py
+pause

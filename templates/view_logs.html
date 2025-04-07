@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Client Logs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .log-list {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+        .log {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .log:last-child {
+            border-bottom: none;
+        }
+        .log-details {
+            font-size: 12px;
+            color: #666;
+        }
+        .pagination {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .pagination a {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+        }
+        .pagination a:hover {
+            background: #f0f0f0;
+        }
+        .pagination .disabled {
+            color: #999;
+            pointer-events: none;
+        }
+        .back {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+        }
+        .back:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <a href="/admin/dashboard" class="back">Back to Dashboard</a>
+    <h2>Client Logs</h2>
+    <div class="log-list">
+        {% if entries %}
+            {% for entry in entries %}
+                <div class="log">
+                    <div>{{ entry.timestamp }} | {{ entry.ip }} | {{ entry.action }}</div>
+                    <div class="log-details">User Agent: {{ entry.user_agent }}</div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="log">No logs found.</div>
+        {% endif %}
+    </div>
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="/admin/view_logs?page={{ page - 1 }}">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+            <a href="/admin/view_logs?page={{ page + 1 }}">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+</body>
+</html>

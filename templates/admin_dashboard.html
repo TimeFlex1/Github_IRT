@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .status { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+        .buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+        button { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .error { color: red; font-size: 14px; }
+        a { color: #007bff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <div class="status">
+        <p><strong>Monitoring:</strong> <span id="monitoringStatus">Unknown</span></p>
+        <p><strong>Last Update:</strong> <span id="lastUpdate">Unknown</span></p>
+        <p><strong>Rate Limit:</strong> <span id="rateLimit">Unknown</span></p>
+        <p><strong>Reset Time:</strong> <span id="resetTime">Unknown</span></p>
+        <p><strong>Total Repos:</strong> <span id="totalRepos">Unknown</span></p>
+    </div>
+    <div class="buttons">
+        <button onclick="toggleMonitoring()">Toggle Monitoring</button>
+        <button onclick="clearRepos()">Clear Repo List</button>
+        <button onclick="clearBackup()">Clear Backup File</button>
+        <button onclick="manualFetch()">Manual Fetch</button>
+        <button onclick="exportRepos('csv')">Export Recent (CSV)</button>
+        <button onclick="exportRepos('json')">Export Recent (JSON)</button>
+        <button onclick="exportRepos('txt')">Export Recent (TXT)</button>
+        <a href="{{ url_for('download_backup') }}">Download Backup</a>
+        <a href="{{ url_for('view_backup', page=1) }}">View Backup</a>
+        <a href="{{ url_for('view_logs', page=1) }}">View Logs</a>
+    </div>
+    <div id="errorMessage" class="error"></div>
+
+    <script>
+        // Helper function to format timestamps
+        function formatTimestamp(timestamp) {
+            if (!timestamp || timestamp === "N/A" || timestamp === "Never") return timestamp;
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: 'numeric',
+                    hour12: true
+                }); // e.g., "April 6, 2025, 3:45 PM"
+            } catch (e) {
+                console.error('Error formatting timestamp:', timestamp, e);
+                return timestamp;
+            }
+        }
+
+        function fetchStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('monitoringStatus').textContent = data.is_monitoring ? 'On' : 'Off';
+                    document.getElementById('lastUpdate').textContent = formatTimestamp(data.last_update);
+                    document.getElementById('rateLimit').textContent = data.rate_limit;
+                    document.getElementById('resetTime').textContent = formatTimestamp(data.reset_time);
+                    document.getElementById('totalRepos').textContent = data.total_repos;
+                })
+                .catch(error => {
+                    console.error('Error fetching status:', error);
+                    document.getElementById('errorMessage').textContent = 'Error fetching status. Please try again later.';
+                });
+        }
+
+        function toggleMonitoring() {
+            fetch('/toggle_monitoring', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    fetchStatus();
+                })
+                .catch(error => {
+                    console.error('Error toggling monitoring:', error);
+                    document.getElementById('errorMessage').textContent = 'Error toggling monitoring. Please try again.';
+                });
+        }
+
+        function clearRepos() {
+            fetch('/admin/clear_repos', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    fetchStatus();
+                })
+                .catch(error => {
+                    console.error('Error clearing repos:', error);
+                    document.getElementById('errorMessage').textContent = 'Error clearing repos. Please try again.';
+                });
+        }
+
+        function clearBackup() {
+            fetch('/admin/clear_backup', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message || data.error);
+                })
+                .catch(error => {
+                    console.error('Error clearing backup:', error);
+                    document.getElementById('errorMessage').textContent = 'Error clearing backup. Please try again.';
+                });
+        }
+
+        function manualFetch() {
+            fetch('/admin/manual_fetch', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message || data.error);
+                    fetchStatus();
+                })
+                .catch(error => {
+                    console.error('Error during manual fetch:', error);
+                    document.getElementById('errorMessage').textContent = 'Error during manual fetch. Please try again.';
+                });
+        }
+
+        function exportRepos(format) {
+            fetch(`/admin/export_recent/${format}`, { method: 'POST' })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Export failed');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `recent_repos.${format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error exporting repos:', error);
+                    document.getElementById('errorMessage').textContent = 'Error exporting repos. Please try again.';
+                });
+        }
+
+        fetchStatus();
+        setInterval(fetchStatus, 10000);
+    </script>
+</body>
+</html>

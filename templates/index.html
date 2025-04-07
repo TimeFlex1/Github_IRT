@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Recent Repos</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .controls { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .search-bar input { padding: 8px; width: 200px; }
+        .sort-bar { display: flex; gap: 10px; align-items: center; }
+        .sort-bar select, .sort-bar button { padding: 8px; }
+        .sort-bar button { background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .sort-bar button:hover { background-color: #0056b3; }
+        .export-buttons { margin-bottom: 20px; display: flex; gap: 10px; }
+        .export-buttons button { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .export-buttons button:hover { background-color: #0056b3; }
+        .repo-list { border: 1px solid #ccc; border-radius: 4px; background: #fff; max-height: 60vh; overflow-y: auto; }
+        .repo { padding: 10px; border-bottom: 1px solid #e9ecef; }
+        .repo:last-child { border-bottom: none; }
+        .repo a { color: #007bff; text-decoration: none; }
+        .repo a:hover { text-decoration: underline; }
+        .repo-details { font-size: 12px; color: #666; }
+        .error { color: red; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Recent GitHub Repositories</h1>
+    <div class="controls">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search by repo name or creator..." onkeyup="filterRepos()">
+            <input type="number" id="followersMinInput" placeholder="Min followers..." onkeyup="filterRepos()">
+            <input type="number" id="followersMaxInput" placeholder="Max followers..." onkeyup="filterRepos()">
+        </div>
+        <div class="sort-bar">
+            <select id="sortCriterion" onchange="filterRepos()">
+                <option value="time">Sort by Time</option>
+                <option value="user">Sort by User</option>
+                <option value="repo">Sort by Repo</option>
+                <option value="followers">Sort by Followers</option>
+            </select>
+            <button id="sortOrderBtn" onclick="toggleSortOrder()">Descending</button>
+        </div>
+    </div>
+    <div class="export-buttons">
+        <button onclick="exportRepos('csv')">Export as CSV</button>
+        <button onclick="exportRepos('json')">Export as JSON</button>
+        <button onclick="exportRepos('txt')">Export as TXT</button>
+    </div>
+    <div id="errorMessage" class="error"></div>
+    <div class="repo-list" id="repoList"></div>
+
+    <script>
+        let repos = [];
+        let filteredRepos = [];
+        let sortCriterion = 'time'; // Default sort by time
+        let sortAscending = false; // Default to descending (newest first)
+
+        // Helper function to format timestamps
+        function formatTimestamp(timestamp) {
+            if (!timestamp || timestamp === "Unknown") return "Unknown";
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: 'numeric',
+                    hour12: true
+                }); // e.g., "April 6, 2025, 3:45 PM"
+            } catch (e) {
+                console.error('Error formatting timestamp:', timestamp, e);
+                return timestamp;
+            }
+        }
+
+        // Toggle sort order between ascending and descending
+        function toggleSortOrder() {
+            sortAscending = !sortAscending;
+            document.getElementById('sortOrderBtn').textContent = sortAscending ? 'Ascending' : 'Descending';
+            filterRepos();
+        }
+
+        // Fetch repositories from the server
+        function fetchRepos() {
+            fetch('/events')
+                .then(response => response.json())
+                .then(data => {
+                    repos = data;
+                    filterRepos();
+                })
+                .catch(error => {
+                    console.error('Error fetching repos:', error);
+                    document.getElementById('errorMessage').textContent = 'Error fetching repositories. Please try again later.';
+                });
+        }
+
+        // Sort and display repositories
+        function displayRepos(reposToDisplay) {
+            filteredRepos = reposToDisplay;
+            const repoList = document.getElementById('repoList');
+            repoList.innerHTML = '';
+            if (reposToDisplay.length === 0) {
+                repoList.innerHTML = '<div class="repo">No repositories found.</div>';
+                return;
+            }
+            reposToDisplay.forEach(repo => {
+                const div = document.createElement('div');
+                div.className = 'repo';
+                div.innerHTML = `
+                    <div><a href="${repo.url}" target="_blank">${repo.name}</a></div>
+                    <div class="repo-details">
+                        Created by ${repo.creator} | Followers: ${repo.followers} | ${formatTimestamp(repo.created_at)} | Description: ${repo.description}
+                    </div>
+                `;
+                repoList.appendChild(div);
+            });
+        }
+
+        // Filter and sort repositories
+        function filterRepos() {
+            // Get filter values
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const followersMin = parseInt(document.getElementById('followersMinInput').value) || 0;
+            const followersMax = parseInt(document.getElementById('followersMaxInput').value) || Infinity;
+            sortCriterion = document.getElementById('sortCriterion').value;
+
+            // Filter repositories
+            let filtered = repos.filter(repo => {
+                try {
+                    const matchesSearch = (repo.name || '').toLowerCase().includes(searchTerm) || (repo.creator || '').toLowerCase().includes(searchTerm);
+                    const followers = parseInt(repo.followers) || 0;
+                    const matchesFollowers = followers >= followersMin && followers <= followersMax;
+                    return matchesSearch && matchesFollowers;
+                } catch (error) {
+                    console.error('Error filtering repo:', repo, error);
+                    return false;
+                }
+            });
+
+            // Sort repositories
+            filtered.sort((a, b) => {
+                let comparison = 0;
+                if (sortCriterion === 'time') {
+                    const dateA = new Date(a.created_at);
+                    const dateB = new Date(b.created_at);
+                    comparison = dateA - dateB;
+                } else if (sortCriterion === 'user') {
+                    comparison = (a.creator || '').localeCompare(b.creator || '');
+                } else if (sortCriterion === 'repo') {
+                    comparison = (a.name || '').localeCompare(b.name || '');
+                } else if (sortCriterion === 'followers') {
+                    const followersA = parseInt(a.followers) || 0;
+                    const followersB = parseInt(b.followers) || 0;
+                    comparison = followersA - followersB;
+                }
+                return sortAscending ? comparison : -comparison;
+            });
+
+            displayRepos(filtered);
+        }
+
+        // Export filtered repositories
+        function exportRepos(format) {
+            if (filteredRepos.length === 0) {
+                alert('No repositories to export.');
+                return;
+            }
+
+            fetch(`/export/${format}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(filteredRepos)
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Export failed');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `repos.${format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error exporting repos:', error);
+                    document.getElementById('errorMessage').textContent = 'Error exporting repositories. Please try again.';
+                });
+        }
+
+        // Initial fetch and setup
+        fetchRepos();
+        setInterval(fetchRepos, 30000);
+    </script>
+</body>
+</html>
